@@ -10,7 +10,8 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [
-    { name = "Adam" }
+    { name = "Adam" },
+    { name = "rift-walker" },
 ]
 keywords = [
     "mcp",
@@ -33,15 +34,19 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Medical Science Apps.",
 ]
+
 dependencies = [
     "mcp>=1.0.0",
-    "myfitnesspal>=2.0.0",
     "pydantic>=2.0.0",
     "httpx>=0.24.0",
-    "browser-cookie3>=0.19.0",
-    "pint>=0.22",
-    "keyring>=24.0.0",
+    "mfp-api",
 ]
+
+[project.urls]
+Repository = "https://github.com/Rift-Walker/myfitnesspal-mcp-python"
+
+[tool.uv.sources]
+mfp-api = { git = "https://github.com/Rift-Walker/mfp-api", branch = "main" }
 
 [project.optional-dependencies]
 dev = [
@@ -75,3 +80,8 @@ target-version = "py310"
 python_version = "3.10"
 warn_return_any = true
 warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = ["live: hits the real MyFitnessPal API with a real account (needs creds.json)"]

@@ -1,42 +1,30 @@
 # MyFitnessPal MCP Server
-# 
-# NOTE: This MCP uses browser cookie authentication by default.
-# For Docker deployment, you'll need to mount your browser's cookie database
-# or use an alternative authentication method.
+#
+# Auth is via MFP_USERNAME/MFP_PASSWORD environment variables only -- pass them
+# with `docker run -e`, no cookie mounting needed.
 #
 # Build: docker build -t mfp-mcp .
-# Run: docker run -it --rm -v ~/.config/google-chrome:/root/.config/google-chrome:ro mfp-mcp
+# Run:   docker run -it --rm -e MFP_USERNAME=... -e MFP_PASSWORD=... mfp-mcp
 
 FROM python:3.12-slim
 
-# Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PYTHONUNBUFFERED=1
 
-# Set working directory
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
 WORKDIR /app
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libffi-dev \
-    && rm -rf /var/lib/apt/lists/*
 
 # Copy project files
 COPY pyproject.toml README.md ./
 COPY src/ ./src/
 
-# Install the package
-RUN pip install --no-cache-dir -e .
+# Resolve and install the package (including the mfp-api git dependency) via uv
+RUN uv sync --no-dev
 
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash mcp
 USER mcp
 
-# Expose default port (for HTTP transport if needed)
-EXPOSE 8000
-
 # Default command runs the MCP server with stdio transport
-ENTRYPOINT ["python", "-m", "mfp_mcp.server"]
+ENTRYPOINT ["uv", "run", "mfp-mcp"]

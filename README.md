@@ -1,6 +1,11 @@
 # MyFitnessPal MCP Server
 
-A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that enables AI assistants like Claude to interact with your MyFitnessPal data, including food diary, exercises, body measurements, nutrition goals, and water intake.
+A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that enables AI
+assistants like Claude to interact with your MyFitnessPal data: food diary, exercises, body
+measurements, nutrition goals, and water intake.
+
+Backed by [`mfp-api`](https://github.com/Rift-Walker/mfp-api), a client for MyFitnessPal's
+**native mobile-app API** (the same JSON API the Android/iOS apps use), not website scraping.
 
 ## Features
 
@@ -18,372 +23,103 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that e
 | `mfp_get_water` | Read | Get water intake for a date |
 | `mfp_set_water` | Write | Log water intake for a date |
 | `mfp_get_report` | Read | Get nutrition reports over a date range |
-| `refresh_browser_cookies` | Utility | Extract and save session cookies from browser |
 
 ## Prerequisites
 
-- **Python 3.10+** (check with `python3 --version`)
-- **pip 21.3+** (for pyproject.toml support; upgrade with `pip install --upgrade pip`)
-- **MyFitnessPal account**
-- **One of the following for authentication:**
-  - Your MFP username/email and password (recommended), OR
-  - Chrome or Firefox with an active MyFitnessPal login session
+- [`uv`](https://docs.astral.sh/uv/) installed
+- A MyFitnessPal account (username/email + password)
 
-### Authentication Options
+## Configuration for Claude Desktop / Claude Code
 
-This MCP supports multiple authentication methods:
+Add this to your MCP client config (`claude_desktop_config.json` or `.mcp.json`):
 
-| Method | Setup | Persistence |
-|--------|-------|-------------|
-| **Credentials in config** | Add `MFP_USERNAME` and `MFP_PASSWORD` to Claude Desktop config | Automatic (session cached 30 days) |
-| **Browser cookies** | Log into myfitnesspal.com in Chrome/Firefox | Until browser session expires |
+```json
+{
+  "mcpServers": {
+    "myfitnesspal": {
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/Rift-Walker/myfitnesspal-mcp-python", "mfp-mcp"],
+      "env": {
+        "MFP_USERNAME": "your_email@example.com",
+        "MFP_PASSWORD": "your_password"
+      }
+    }
+  }
+}
+```
 
-## Installation
+`uvx` fetches the server (and its `mfp-api` dependency) straight from GitHub and runs it — no
+local clone or virtualenv needed. Restart your MCP client after saving the config.
 
-### Option 1: Install from Source (Recommended)
+To run from a local clone instead (e.g. for development):
 
 ```bash
-# Clone the repository
-git clone https://github.com/YOUR_USERNAME/myfitnesspal-mcp-python.git
+git clone https://github.com/Rift-Walker/myfitnesspal-mcp-python
 cd myfitnesspal-mcp-python
-
-# Create virtual environment (use python3.10+ on macOS/Linux)
-python3 -m venv venv
-# On macOS, you may need to specify version: python3.12 -m venv venv
-
-# Activate virtual environment
-source venv/bin/activate  # macOS/Linux
-# On Windows: .\venv\Scripts\activate
-
-# Upgrade pip (required for pyproject.toml support)
-pip install --upgrade pip
-
-# Install the package in editable mode
-pip install -e .
+uv sync
+uv run mfp-mcp
 ```
 
-### Option 2: Install with pip (when published)
+and point `command`/`args` at `uv run --directory /path/to/mfp-mcp mfp-mcp` instead.
 
-```bash
-pip install mfp-mcp
-```
+## Authentication
 
-> **Note**: Option 2 requires the package to be published to PyPI. For now, use Option 1.
-
-### Verify Installation
-
-After installation, verify the server can start:
-
-```bash
-# With venv activated
-python -m mfp_mcp.server
-```
-
-You should see the server waiting for input (it communicates via stdio). Press `Ctrl+C` to stop.
-
-To test authentication (optional):
-
-```bash
-MFP_USERNAME="your_email" MFP_PASSWORD="your_password" python -c "
-from mfp_mcp.server import get_mfp_client
-client = get_mfp_client()
-print('Authentication successful!')
-"
-```
-
-## Configuration for Claude Desktop
-
-### Step 1: Locate Your Config File
-
-| OS | Config File Location |
-|----|---------------------|
-| **macOS** | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-| **Windows** | `%APPDATA%\Claude\claude_desktop_config.json` |
-
-### Step 2: Add the MCP Server Configuration
-
-If the file doesn't exist, create it. Add or merge the following configuration:
-
-#### Option A: With Credentials (Recommended - No Browser Required)
-
-**macOS Example:**
-```json
-{
-  "mcpServers": {
-    "myfitnesspal": {
-      "command": "/Users/yourname/myfitnesspal-mcp-python/venv/bin/python",
-      "args": ["-m", "mfp_mcp.server"],
-      "env": {
-        "MFP_USERNAME": "your_email@example.com",
-        "MFP_PASSWORD": "your_password"
-      }
-    }
-  }
-}
-```
-
-**Windows Example:**
-```json
-{
-  "mcpServers": {
-    "myfitnesspal": {
-      "command": "C:\\Users\\YourName\\myfitnesspal-mcp-python\\venv\\Scripts\\python.exe",
-      "args": ["-m", "mfp_mcp.server"],
-      "env": {
-        "MFP_USERNAME": "your_email@example.com",
-        "MFP_PASSWORD": "your_password"
-      }
-    }
-  }
-}
-```
-
-#### Option B: Without Credentials (Browser Cookie Fallback)
-
-**macOS Example:**
-```json
-{
-  "mcpServers": {
-    "myfitnesspal": {
-      "command": "/Users/yourname/myfitnesspal-mcp-python/venv/bin/python",
-      "args": ["-m", "mfp_mcp.server"]
-    }
-  }
-}
-```
-
-> ⚠️ **Important**: Use **full absolute paths** to the Python executable in your virtual environment. Replace `yourname`/`YourName` with your actual username.
-
-### Step 3: Restart Claude Desktop
-
-After saving the config file, **completely quit and restart Claude Desktop** for the changes to take effect.
-
-### Step 4: Verify Connection
-
-In Claude Desktop, you should see a hammer icon (🔨) indicating MCP tools are available. Try asking:
-
-> "Show my MyFitnessPal diary for today"
-
-## Authentication Methods
-
-The MCP server supports three authentication methods, tried in this order:
-
-### 1. Environment Variables (Recommended)
-Set `MFP_USERNAME` and `MFP_PASSWORD` in your Claude Desktop config's `env` section. This is the most reliable method and doesn't require a browser.
-
-```json
-"env": {
-  "MFP_USERNAME": "your_email@example.com",
-  "MFP_PASSWORD": "your_password"
-}
-```
-
-### 2. Stored Session Cookies
-After successful authentication, session cookies are saved to `~/.mfp_mcp/cookies.json`. These persist for 30 days, so you won't need to re-authenticate frequently.
-
-### 3. Browser Cookies (Fallback)
-If no credentials are provided and no stored cookies exist, the server falls back to reading cookies from Chrome or Firefox. You must be logged into myfitnesspal.com in your browser.
-
-## Security Note on Credentials
-
-Your MyFitnessPal credentials in the Claude Desktop config are stored locally on your machine. The config file is only readable by your user account. However, if you're concerned about storing credentials:
-
-1. Use Option B (browser cookies) instead
-2. Or use a dedicated MyFitnessPal account for API access
-3. Session cookies are stored in `~/.mfp_mcp/cookies.json` with restricted permissions
+Set `MFP_USERNAME` and `MFP_PASSWORD` in the `env` block of your MCP client config, as shown
+above. That's the only supported method — credentials live solely in that local config file
+(never committed, never logged) and are read once via `os.environ.get(...)` to log in. The server
+keeps the resulting access token in memory and refreshes it automatically; there are no cookies,
+no browser dependency, and nothing written to disk.
 
 ## Usage Examples
 
 Once configured, you can interact with your MyFitnessPal data through Claude:
 
-### Food Diary
 ```
 "Show me what I ate today"
-"Get my food diary for 2026-01-05"
-"What meals did I log yesterday?"
-```
-
-### Track Weight Progress
-```
-"Show my weight history for the past 30 days"
-"Log my weight as 232.5 pounds"
-"What's my weight trend this month?"
-```
-
-### Search Foods
-```
 "Search MyFitnessPal for chicken breast"
-"Find nutrition info for Greek yogurt"
-"Look up calories in a banana"
-```
-
-### Check Goals vs Actual
-```
-"Compare my nutrition goals to what I actually ate today"
-"Am I on track with my protein intake?"
-"How many calories do I have left today?"
-```
-
-### Exercise Log
-```
+"Log my weight as 180 pounds"
 "What exercises did I log today?"
-"Show my workout from yesterday"
-```
-
-### Nutrition Reports
-```
+"Compare my nutrition goals to what I actually ate today"
 "Show my calorie intake over the past week"
-"What's my average protein intake this week?"
-"Generate a nutrition report for January"
-```
-
-## Project Structure
-
-```
-myfitnesspal-mcp-python/
-├── Dockerfile              # Container deployment
-├── pyproject.toml          # Package configuration
-├── README.md               # This file
-└── src/
-    └── mfp_mcp/
-        ├── __init__.py     # Package initialization
-        └── server.py       # MCP server implementation
 ```
 
 ## Development
 
-### Setup Development Environment
-
 ```bash
-# Clone and enter directory
-git clone https://github.com/YOUR_USERNAME/myfitnesspal-mcp-python.git
+git clone https://github.com/Rift-Walker/myfitnesspal-mcp-python
 cd myfitnesspal-mcp-python
-
-# Create virtual environment (Python 3.10+ required)
-python3 -m venv venv
-source venv/bin/activate
-
-# Upgrade pip and install with dev dependencies
-pip install --upgrade pip
-pip install -e ".[dev]"
+uv sync --extra dev
 ```
 
-### Run Tests
+### Run tests
+
+Live tests hit a real MyFitnessPal account via a local `creds.json`
+(`{"username": "...", "password": "..."}`, gitignored, **never commit this file**). They're
+marked `@pytest.mark.live` and skip automatically if no creds file is found.
 
 ```bash
-pytest
+uv run pytest
 ```
 
-### Code Formatting
+### Code quality
 
 ```bash
-black src/
-isort src/
-ruff check src/
-```
-
-### Type Checking
-
-```bash
-mypy src/
-```
-
-## Docker Deployment
-
-> ⚠️ **Note**: Docker deployment requires mounting your browser's cookie database for authentication.
-
-```bash
-# Build the image
-docker build -t mfp-mcp .
-
-# Run with Chrome cookies mounted (Linux example)
-docker run -it --rm \
-  -v ~/.config/google-chrome:/root/.config/google-chrome:ro \
-  mfp-mcp
+uv run black src/ tests/
+uv run isort src/ tests/
+uv run ruff check src/ tests/
+uv run mypy src/
 ```
 
 ## Troubleshooting
 
-### "python: command not found" or wrong Python version
+**"MFP_USERNAME and MFP_PASSWORD environment variables must be set"** — add them to the `env`
+block in your MCP client config (see above) and restart the client.
 
-**Problem**: Python is not in PATH or you need to specify version.
+**Tools not appearing** — check your config file is valid JSON, restart the client completely,
+and check its logs (macOS: `~/Library/Logs/Claude/`; Windows: `%APPDATA%\Claude\logs\`).
 
-**Solutions**:
-1. On macOS/Linux, use `python3` instead of `python`
-2. Check your version: `python3 --version` (must be 3.10+)
-3. If needed, install Python 3.12 via Homebrew: `brew install python@3.12`
-4. Then create venv with: `python3.12 -m venv venv`
-
-### "pip install -e ." fails with "setup.py not found"
-
-**Problem**: Your pip version is too old to support pyproject.toml builds.
-
-**Solution**: Upgrade pip first:
-```bash
-pip install --upgrade pip
-pip install -e .
-```
-
-### "Failed to authenticate with MyFitnessPal"
-
-**Problem**: The server can't authenticate with your credentials or read browser cookies.
-
-**Solutions**:
-1. **If using credentials**: Double-check your MFP_USERNAME and MFP_PASSWORD in the config
-2. **If using browser cookies**: Make sure you're logged into myfitnesspal.com in Chrome or Firefox
-3. Try logging out and back in to MyFitnessPal
-4. Clear browser cookies and log in fresh
-5. On **macOS**, grant **Full Disk Access** to Claude Desktop:
-   - System Settings → Privacy & Security → Full Disk Access
-   - Add Claude.app
-
-### "No module named 'mfp_mcp'"
-
-**Problem**: Package not installed or wrong Python environment.
-
-**Solutions**:
-1. Ensure you're using the correct Python from your virtual environment
-2. Reinstall the package: `pip install -e .`
-3. Verify the path in your Claude Desktop config points to the venv Python:
-   ```
-   /path/to/project/venv/bin/python  # macOS/Linux
-   C:\path\to\project\venv\Scripts\python.exe  # Windows
-   ```
-
-### Tools not appearing in Claude Desktop
-
-**Problem**: MCP server not connecting.
-
-**Solutions**:
-1. Check the config file syntax (must be valid JSON - use a JSON validator)
-2. Use **absolute paths** in the configuration (no `~` or relative paths)
-3. Restart Claude Desktop completely (Cmd+Q on macOS, then relaunch)
-4. Check Claude Desktop logs:
-   - macOS: `~/Library/Logs/Claude/`
-   - Windows: `%APPDATA%\Claude\logs\`
-
-### Empty responses or no data
-
-**Problem**: Authentication works but no data returned.
-
-**Solutions**:
-1. Verify you have data logged in MyFitnessPal for the requested date
-2. Check the date format (YYYY-MM-DD)
-3. Try a recent date where you know you have entries
-
-### Double parentheses in terminal prompt like "((venv) )"
-
-**Problem**: VS Code/Cursor Python extension bug with venv prompt.
-
-**Solutions**:
-1. Update the Python extension in VS Code/Cursor
-2. Or manually fix the venv activate script - change line ~70 in `venv/bin/activate`:
-   ```bash
-   # Change from:
-   PS1="("'(venv) '") ${PS1:-}"
-   # To:
-   PS1="(venv) ${PS1:-}"
-   ```
+**Empty responses** — verify you have data logged in MyFitnessPal for the requested date, and
+that dates are `YYYY-MM-DD`.
 
 ## API Reference
 
@@ -409,15 +145,16 @@ Add a food item to your diary for a specific meal and date.
 - `meal` (optional): Meal name - "Breakfast", "Lunch", "Dinner", or "Snacks" (default: "Breakfast")
 - `date` (optional): YYYY-MM-DD format (default: today)
 - `quantity` (optional): Number of servings (default: 1.0)
-- `unit` (optional): Unit/serving size description (e.g., "1 cup", "100g")
+- `unit` (optional): Serving size unit to log (e.g. "g", "oz", "cup") -- must match one of the
+  food's available serving sizes (see `mfp_get_food_details`); defaults to the food's default
+  serving size if omitted
 
-**Example workflow:**
-1. Use `mfp_search_food` to find a food item and get its `mfp_id`
-2. Use `mfp_add_food_to_diary` with the `mfp_id` to add it to your diary
+**Example workflow:** use `mfp_search_food` to find a food item and get its `mfp_id`, then
+`mfp_add_food_to_diary` with that `mfp_id` to add it to your diary.
 
 ### mfp_get_measurements
 Get body measurement history.
-- `measurement` (optional): "Weight", "Body Fat", "Waist", etc.
+- `measurement` (optional): e.g. "Weight" (default; this is the server's canonical capitalized form)
 - `start_date` (optional): YYYY-MM-DD (default 30 days ago)
 - `end_date` (optional): YYYY-MM-DD (default today)
 - `response_format`: "markdown" or "json"
@@ -433,12 +170,12 @@ Get exercise log for a date.
 - `response_format`: "markdown" or "json"
 
 ### mfp_get_goals
-Get daily nutrition goals.
-- `date` (optional): YYYY-MM-DD (default today)
+Get daily nutrition goals. Goals are a single account-wide record in MyFitnessPal, not per-day.
+- `date` (optional): accepted for compatibility but doesn't change the result
 - `response_format`: "markdown" or "json"
 
 ### mfp_set_goals
-Update nutrition goals.
+Update nutrition goals. Only updates the values provided; others remain unchanged.
 - `calories` (optional): Daily calorie goal
 - `protein` (optional): Daily protein in grams
 - `carbohydrates` (optional): Daily carbs in grams
@@ -449,23 +186,24 @@ Get water intake for a date.
 - `date` (optional): YYYY-MM-DD (default today)
 
 ### mfp_set_water
-Log water intake for a date.
-- `cups` (required): Number of cups of water (e.g., 2.5 for 2.5 cups). Note: MyFitnessPal uses cups as the unit (1 cup = ~237ml)
+Log water intake for a date. Replaces the day's total, not additive (matches MyFitnessPal's own
+water endpoint behavior).
+- `cups` (required): Number of cups of water (e.g., 2.5 for 2.5 cups)
 - `date` (optional): YYYY-MM-DD format (default: today)
 
 ### mfp_get_report
-Get nutrition report over a date range.
-- `report_name` (optional): "Net Calories", "Protein", "Fat", "Carbs"
+Get a nutrition report over a date range, computed client-side from daily diary totals.
+- `report_name` (optional): "Net Calories", "Protein", "Fat", "Carbs" (unrecognized names fall back to calories)
 - `start_date` (optional): YYYY-MM-DD (default 7 days ago)
 - `end_date` (optional): YYYY-MM-DD (default today)
 - `response_format`: "markdown" or "json"
 
 ## Security & Privacy
 
-- **Credentials**: If using username/password authentication, credentials are stored in your Claude Desktop config file which is only readable by your user account. Session cookies are cached in `~/.mfp_mcp/cookies.json` for 30 days.
-- **Browser Cookies**: As a fallback, the server can read your browser cookies to authenticate with MyFitnessPal.
-- **Local Only**: The server runs locally on your machine via stdio transport. No data is sent to any third-party servers.
-- **No External Transmission**: Your MyFitnessPal data is only transmitted between your computer and MyFitnessPal's servers (myfitnesspal.com).
+- Credentials live only in your local MCP client config file, read via environment variables.
+  Nothing is written to disk by this server, and credentials are never logged.
+- The server runs locally via stdio transport. Your data is only transmitted between your machine
+  and MyFitnessPal's own servers — nothing goes to any third party.
 
 ## License
 
@@ -473,6 +211,6 @@ MIT License - See [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
-- [python-myfitnesspal](https://github.com/coddingtonbear/python-myfitnesspal) - The underlying library for MyFitnessPal access
+- [mfp-api](https://github.com/Rift-Walker/mfp-api) - native MyFitnessPal API client backing this server
 - [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) - Model Context Protocol framework
 - [Anthropic](https://anthropic.com) - Claude and the MCP specification
