@@ -1,10 +1,13 @@
 # MyFitnessPal MCP Server
 #
-# Auth is via MFP_USERNAME/MFP_PASSWORD environment variables only -- pass them
-# with `docker run -e`, no cookie mounting needed.
-#
 # Build: docker build -t mfp-mcp .
-# Run:   docker run -it --rm -e MFP_USERNAME=... -e MFP_PASSWORD=... mfp-mcp
+#
+# Auth (recommended): log in once into a persistent volume, then run the server
+# with that volume mounted -- no credentials in the run command:
+#   docker run -it --rm -v mfp-tokens:/home/mcp/.mfp-mcp mfp-mcp mfp-mcp-auth
+#   docker run -i --rm -v mfp-tokens:/home/mcp/.mfp-mcp mfp-mcp
+#
+# Fallback: docker run -i --rm -e MFP_USERNAME=... -e MFP_PASSWORD=... mfp-mcp
 
 FROM python:3.12-slim
 
@@ -26,5 +29,7 @@ RUN uv sync --no-dev
 RUN useradd --create-home --shell /bin/bash mcp
 USER mcp
 
-# Default command runs the MCP server with stdio transport
-ENTRYPOINT ["uv", "run", "mfp-mcp"]
+# Default command runs the MCP server with stdio transport; pass `mfp-mcp-auth`
+# as the command instead for the one-time interactive login.
+ENTRYPOINT ["uv", "run"]
+CMD ["mfp-mcp"]

@@ -29,20 +29,31 @@ Backed by [`mfp-api`](https://github.com/Rift-Walker/mfp-api), a client for MyFi
 - [`uv`](https://docs.astral.sh/uv/) installed
 - A MyFitnessPal account (username/email + password)
 
-## Configuration for Claude Desktop / Claude Code
+## Setup
 
-Add this to your MCP client config (`claude_desktop_config.json` or `.mcp.json`):
+### 1. Log in once (stores OAuth tokens, not your password)
+
+```bash
+uvx --from git+https://github.com/Rift-Walker/myfitnesspal-mcp-python mfp-mcp-auth
+```
+
+This prompts for your MyFitnessPal username and password, performs the OAuth login, and saves
+the resulting session tokens to `~/.mfp-mcp/session.json`. Your password is never written to
+disk. Useful flags: `--verify` (check the stored session still works), `--force` (log in
+again), `--token-path` (store the file somewhere else; set `MFP_TOKEN_PATH` for the server to
+match).
+
+### 2. Configure your MCP client
+
+Add this to your MCP client config (`claude_desktop_config.json` or `.mcp.json`) — no
+credentials needed:
 
 ```json
 {
   "mcpServers": {
     "myfitnesspal": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/Rift-Walker/myfitnesspal-mcp-python", "mfp-mcp"],
-      "env": {
-        "MFP_USERNAME": "your_email@example.com",
-        "MFP_PASSWORD": "your_password"
-      }
+      "args": ["--from", "git+https://github.com/Rift-Walker/myfitnesspal-mcp-python", "mfp-mcp"]
     }
   }
 }
@@ -64,11 +75,17 @@ and point `command`/`args` at `uv run --directory /path/to/mfp-mcp mfp-mcp` inst
 
 ## Authentication
 
-Set `MFP_USERNAME` and `MFP_PASSWORD` in the `env` block of your MCP client config, as shown
-above. That's the only supported method — credentials live solely in that local config file
-(never committed, never logged) and are read once via `os.environ.get(...)` to log in. The server
-keeps the resulting access token in memory and refreshes it automatically; there are no cookies,
-no browser dependency, and nothing written to disk.
+**Recommended: stored OAuth session.** Run `mfp-mcp-auth` once (see Setup above). It exchanges
+your credentials for OAuth tokens and saves them to `~/.mfp-mcp/session.json` with owner-only
+file permissions; the password itself is never stored. The server loads that session at startup,
+refreshes the access token automatically, and writes rotated tokens back to the file so the
+session stays valid indefinitely. Re-run `mfp-mcp-auth --force` if MyFitnessPal ever invalidates
+the refresh token (e.g. after a password change).
+
+**Fallback: environment variables.** If no session file exists, the server falls back to
+`MFP_USERNAME`/`MFP_PASSWORD` from the environment (e.g. an `env` block in your MCP client
+config). This keeps your password in plaintext in that config file, so prefer the stored-session
+method.
 
 ## Usage Examples
 
@@ -112,8 +129,11 @@ uv run mypy src/
 
 ## Troubleshooting
 
-**"MFP_USERNAME and MFP_PASSWORD environment variables must be set"** — add them to the `env`
-block in your MCP client config (see above) and restart the client.
+**"No MyFitnessPal session found"** — run `mfp-mcp-auth` once to log in and store OAuth tokens
+(see Setup above), then restart your MCP client.
+
+**"Stored MyFitnessPal session ... could not be refreshed"** — the refresh token has been
+invalidated (commonly after a password change). Run `mfp-mcp-auth --force` to log in again.
 
 **Tools not appearing** — check your config file is valid JSON, restart the client completely,
 and check its logs (macOS: `~/Library/Logs/Claude/`; Windows: `%APPDATA%\Claude\logs\`).
@@ -200,8 +220,11 @@ Get a nutrition report over a date range, computed client-side from daily diary 
 
 ## Security & Privacy
 
-- Credentials live only in your local MCP client config file, read via environment variables.
-  Nothing is written to disk by this server, and credentials are never logged.
+- Your password is used once, interactively, by `mfp-mcp-auth` to obtain OAuth tokens; it is
+  never stored or logged. Only the tokens are written to disk (`~/.mfp-mcp/session.json`,
+  owner-only permissions), and they can be revoked by changing your MyFitnessPal password.
+- The MCP client config contains no credentials at all (unless you opt into the
+  `MFP_USERNAME`/`MFP_PASSWORD` fallback).
 - The server runs locally via stdio transport. Your data is only transmitted between your machine
   and MyFitnessPal's own servers — nothing goes to any third party.
 

@@ -9,8 +9,9 @@ Backed by `mfp_native`, a client for MyFitnessPal's native mobile-app API
 (OAuth + REST v2), reverse-engineered from the Android app. This replaces
 the previous website-HTML-scraping backend (`python-myfitnesspal`).
 
-Authentication: set MFP_USERNAME and MFP_PASSWORD environment variables to
-your MyFitnessPal account credentials.
+Authentication: run `mfp-mcp-auth` once to log in and store OAuth tokens on
+disk (see mfp_mcp.auth); the server then authenticates from those tokens.
+MFP_USERNAME/MFP_PASSWORD environment variables remain as a fallback.
 """
 
 import json
@@ -27,6 +28,8 @@ from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, Field, ConfigDict
 
 from mfp_api import MfpClient, MfpApiError
+
+from mfp_mcp import auth as mfp_auth
 
 # Configure logging to stderr (required for stdio transport)
 logging.basicConfig(
@@ -50,11 +53,16 @@ _client_lock = threading.Lock()
 
 def get_mfp_client() -> MfpClient:
     """
-    Get an authenticated MfpClient, logging in once and reusing the session
+    Get an authenticated MfpClient, authenticating once and reusing the session
     (which refreshes its own access token as needed) for subsequent calls.
 
+    Preferred auth is the OAuth session stored by the `mfp-mcp-auth` CLI (no
+    password on disk or in the MCP config); MFP_USERNAME/MFP_PASSWORD
+    environment variables are supported as a fallback.
+
     Raises:
-        RuntimeError: If MFP_USERNAME/MFP_PASSWORD aren't set or login fails.
+        RuntimeError: If no stored session exists and no credentials are set,
+            or authentication fails.
     """
     global _client
     if _client is not None:
@@ -64,15 +72,22 @@ def get_mfp_client() -> MfpClient:
         if _client is not None:
             return _client
 
+        client = mfp_auth.load_client()
+        if client is not None:
+            logger.info("Using stored MyFitnessPal session from %s", mfp_auth.default_token_path())
+            _client = client
+            return _client
+
         username = os.environ.get("MFP_USERNAME")
         password = os.environ.get("MFP_PASSWORD")
         if not username or not password:
             raise RuntimeError(
-                "MFP_USERNAME and MFP_PASSWORD environment variables must be set "
-                "to your MyFitnessPal account credentials."
+                "No MyFitnessPal session found. Run `mfp-mcp-auth` once to log in and "
+                f"store OAuth tokens at {mfp_auth.default_token_path()} (recommended), "
+                "or set MFP_USERNAME/MFP_PASSWORD environment variables."
             )
 
-        logger.info("Logging into MyFitnessPal native API")
+        logger.info("Logging into MyFitnessPal native API with MFP_USERNAME/MFP_PASSWORD")
         _client = MfpClient.login(username, password)
         return _client
 

@@ -60,6 +60,7 @@ dev = [
 
 [project.scripts]
 mfp-mcp = "mfp_mcp.server:main"
+mfp-mcp-auth = "mfp_mcp.auth:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mfp_mcp"]
